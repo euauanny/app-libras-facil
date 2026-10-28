@@ -13,14 +13,13 @@ import android.widget.*
 import android.text.InputFilter
 
 class MainActivity : Activity() {
-    private val service: TranslationService = DemoTranslationService()
-    private lateinit var avatar: AvatarPlayer
+    private lateinit var avatar: VLibrasAvatarPlayer
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var input: EditText
     private lateinit var status: TextView
     private lateinit var translate: Button
     private lateinit var replay: Button
-    private var lastTranslation: Translation? = null
+    private lateinit var progress: ProgressBar
     private var busy = false
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun text(value: String, size: Float = 16f) = TextView(this).apply {
@@ -41,7 +40,6 @@ class MainActivity : Activity() {
             view.setPadding(0, top, 0, bottom); insets
         }
         root.addView(text("LIBRAS FÁCIL", 14f).apply { setTypeface(null, Typeface.BOLD) })
-        root.addView(text("Uma ponte para\na comunicação", 30f).apply { setTypeface(null, Typeface.BOLD) })
         root.addView(text("Escreva uma frase em português para iniciar.", 16f))
         root.addView(text("Seu texto", 18f).apply { labelFor = R.id.source_text })
         input = EditText(this).apply {
@@ -51,43 +49,46 @@ class MainActivity : Activity() {
             setText(savedInstanceState?.getString("input") ?: "")
         }
         root.addView(input, LinearLayout.LayoutParams(-1, -2))
-        root.addView(text("Até 500 caracteres • comece com uma frase curta", 13f))
+        root.addView(text("Até 500 caracteres", 13f))
         translate = Button(this).apply {
-            text = "Traduzir / Reproduzir"; isAllCaps = false; minHeight = dp(52)
+            text = "Testar API"; isAllCaps = false; minHeight = dp(52)
             setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(16, 105, 94))
             setOnClickListener { submit() }
         }
         root.addView(translate, LinearLayout.LayoutParams(-1, -2))
-        status = text(service.status, 14f).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        status = text("Carregando ferramenta VLibras…", 14f).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         root.addView(status)
-        avatar = PlaceholderAvatarPlayer(this)
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true }
+        root.addView(progress, LinearLayout.LayoutParams(-1, dp(4)))
+        avatar = VLibrasAvatarPlayer(this) { ready, loading, message ->
+            busy = loading
+            translate.isEnabled = ready
+            progress.visibility = if (loading) View.VISIBLE else View.GONE
+            status.text = message
+            if (::replay.isInitialized) replay.isEnabled = !loading
+        }
         avatar.view.background = GradientDrawable().apply { setColor(Color.rgb(222, 238, 233)); cornerRadius = dp(20).toFloat() }
-        root.addView(avatar.view, LinearLayout.LayoutParams(-1, dp(240)).apply { topMargin = dp(12); bottomMargin = dp(12) })
+
         replay = Button(this).apply {
-            text = "Repetir demonstração"; isAllCaps = false; isEnabled = false
-            setOnClickListener { lastTranslation?.let { avatar.play(it) } }
+            text = "Recarregar VLibras"; isAllCaps = false; isEnabled = false
+            setOnClickListener { avatar.load() }
         }
         root.addView(replay, LinearLayout.LayoutParams(-1, -2))
-        root.addView(text("Protótipo acadêmico • modo demonstração", 14f).apply { setTypeface(null, Typeface.BOLD) })
-        root.addView(text("Esta versão testa a interface. Ainda não traduz para Libras nem reproduz sinais. Na versão integrada, a tradução automática poderá apresentar falhas.", 14f))
+        root.addView(avatar.view, LinearLayout.LayoutParams(-1, dp(480)).apply { topMargin = dp(12); bottomMargin = dp(12) })
+        translate.isEnabled = false
+        avatar.load()
     }
     private fun submit() {
         if (busy) return
         val phrase = input.text.toString().trim()
         if (phrase.isEmpty()) { input.error = "Digite uma frase em português"; input.requestFocus(); return }
-        busy = true; translate.isEnabled = false; replay.isEnabled = false
-        status.text = "Preparando demonstração local…"
-        // Apenas uma espera visual. O adaptador de rede deve executar fora da thread principal.
-        handler.postDelayed({
-            try {
-                val result = service.translate(phrase)
-                avatar.play(result); lastTranslation = result; replay.isEnabled = true
-                status.text = "Demonstração concluída • API e avatar ainda não integrados"
-            } catch (error: Exception) {
-                status.text = error.message ?: "Não foi possível concluir. Tente novamente."
-            } finally { busy = false; translate.isEnabled = true }
-        }, 700)
+        avatar.prepare(phrase)
+        status.text = "VLibras carregado • texto enviado ao widget"
     }
     override fun onSaveInstanceState(outState: Bundle) { outState.putString("input", input.text.toString()); super.onSaveInstanceState(outState) }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); avatar.release(); super.onDestroy() }
 }
+
+
+
+

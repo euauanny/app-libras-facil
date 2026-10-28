@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:18px sans-serif;margin:20px;background:#f1f7f5;color:#173136}#phrase{padding:18px;background:white;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}button{padding:12px}#status{font-size:14px}</style>
+</head><body>
+
+<p id="phrase" tabindex="0">Digite uma frase no aplicativo.</p>
+<p id="status" role="status" hidden>Carregando ferramenta VLibras…</p>
+<script>
+function report(kind) {
+  if (window.AvatarStatus) AvatarStatus.postMessage(kind);
+}
+function setPhrase(text) {
+  document.getElementById('phrase').textContent = text;
+  document.getElementById('phrase').focus();
+}
+let settled = false;
+function fail() {
+  if(settled) return;
+  settled = true;
+  document.getElementById('status').textContent = 'Não foi possível carregar o VLibras. Verifique a internet e tente recarregar.';
+  report('error');
+}
+const timeout = setTimeout(fail, 45000);
+const script = document.createElement('script');
+script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
+script.onerror = fail;
+script.onload = () => {
+  // O carregamento do script não confirma o carregamento do avatar/WebGL.
+  if(settled) return;
+  settled = true;
+  clearTimeout(timeout);
+  document.getElementById('status').textContent = 'VLibras carregado';
+  report('scriptLoaded');
+};
+document.body.appendChild(script);
+</script></body></html>
+
